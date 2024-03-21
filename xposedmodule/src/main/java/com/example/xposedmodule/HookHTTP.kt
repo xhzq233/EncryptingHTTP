@@ -5,6 +5,8 @@ import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
+import java.io.ByteArrayInputStream
+import java.io.InputStream
 import java.net.SocketAddress
 
 @Suppress("unused")
@@ -34,5 +36,29 @@ class HookHTTP : IXposedHookLoadPackage {
                 }
             }
         )
+
+
+
+        XposedHelpers.findAndHookMethod(
+            "java.net.Socket",
+            lpparam.classLoader,
+            "getInputStream",
+            object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    val realInputStream = param.result as InputStream
+                    Thread {
+                        val bytes = ByteArray(1000)
+                        while (true) {
+                            val nBytes = realInputStream.read(bytes)
+                            if (nBytes == 0) break
+                            XposedBridge.log("Receive: " + String(bytes))
+                        }
+                    }
+                    param.result = ByteArrayInputStream(byteArrayOf())
+                    XposedBridge.log("java.net.Socket.getInputStream hooked")
+                }
+            }
+        )
+
     }
 }
