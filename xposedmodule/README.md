@@ -30,15 +30,15 @@
    
    ```
    dependencyResolutionManagement {
-
-    ...
+   
+    	...
     
-    repositories {
-    
-        ...
-        
-        maven { url 'https://api.xposed.info/' }
-    }
+      repositories {
+   
+          ...
+   
+          maven { url 'https://api.xposed.info/' }
+      }
     }
    ```
    
@@ -46,14 +46,15 @@
 
    ``` 
    dependencies {
-   compileOnly 'de.robv.android.xposed:api:82'
-
-   ...
+     compileOnly 'de.robv.android.xposed:api:82'
+   
+     ...
    }
    ```
    
 4. 在 /app/src/main/assets 新建 xposed_init 入口文件，写入com.example.xposedmodule.<HOOK_CLASS_NAME>
 5. AndroidManifest.xml 添加用于标识 xposed 模块
+   ```xml
    <meta-data
    android:name="xposedmodule"
    android:value="true" />
@@ -63,4 +64,5 @@
    <meta-data
    android:name="xposedminversion"
    android:value="54" />
+   ```
 6. 最后在 java/com/example/xposedmodule/<HOOK_CLASS_NAME>.kt 添加 Hook 代码
