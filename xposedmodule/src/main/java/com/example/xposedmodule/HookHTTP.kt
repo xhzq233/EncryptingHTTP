@@ -60,5 +60,28 @@ class HookHTTP : IXposedHookLoadPackage {
             }
         )
 
+
+        // Hook getOutputStream
+        XposedHelpers.findAndHookMethod(
+            "java.net.Socket",
+            lpparam.classLoader,
+            "getOutputStream",
+            object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    val realOutputStream = param.result as InputStream
+                    Thread {
+                        val bytes = ByteArray(1000)
+                        while (true) {
+                            val nBytes = realOutputStream.read(bytes)
+                            if (nBytes == 0) break
+                            XposedBridge.log("Send: " + String(bytes))
+                        }
+                    }
+                    param.result = ByteArrayInputStream(byteArrayOf())
+                    XposedBridge.log("java.net.Socket.getOutputStream hooked")
+                }
+            }
+        )
+
     }
 }

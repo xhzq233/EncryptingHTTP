@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -29,6 +30,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
+import java.net.Socket
 
 
 class MainActivity : ComponentActivity() {
@@ -56,6 +58,19 @@ class MainActivity : ComponentActivity() {
 fun Request(client: OkHttpClient = OkHttpClient()) {
     val stringResp: MutableState<String> = remember { mutableStateOf("None") }
 
+    val callback = object : Callback {
+        override fun onFailure(call: Call, e: IOException) {
+            stringResp.value = e.message.toString()
+            Log.e("DEMO", "onFailure", e)
+        }
+
+        override fun onResponse(call: Call, response: Response) {
+            val res = response.body?.string() ?: ""
+            Log.i("DEMO", "onResponse $res")
+            stringResp.value = res
+        }
+    }
+
     Column {
         Button({
             val req = Request.Builder()
@@ -63,23 +78,27 @@ fun Request(client: OkHttpClient = OkHttpClient()) {
                 .addHeader("User-Agent", "curl/8.4.0")
                 .build()
 
-            val callback = object : Callback {
-                override fun onFailure(call: Call, e: IOException) {
-                    stringResp.value = e.message.toString()
-                    Log.e("DEMO", "onFailure", e)
-                }
-
-                override fun onResponse(call: Call, response: Response) {
-                    val res = response.body?.string() ?: ""
-                    Log.i("DEMO", "onResponse $res")
-                    stringResp.value = res
-                }
-            }
+            client.newCall(req).enqueue(callback)
+        }) {
+            Text(text = "Request HTTP")
+        }
+        Button({
+            val req = Request.Builder()
+                .url("https://cip.cc")
+                .addHeader("User-Agent", "curl/8.4.0")
+                .build()
 
             client.newCall(req).enqueue(callback)
         }) {
-            Text(text = "Request")
+            Text(text = "Request HTTPS")
         }
+        // Clear text
+        Button({
+            stringResp.value = "None"
+        }) {
+            Text(text = "Clear")
+        }
+        Divider()
         Text(
             stringResp.value,
             Modifier
