@@ -1,21 +1,11 @@
 <resources>
     <string name="app_name">VPNModule</string>
-
-    <string name="address">Server Address:</string>
-    <string name="port">Server Port:</string>
-    <string name="secret">Shared Secret:</string>
-    <string name="connect">Connect!</string>
-    <string name="disconnect">Disconnect!</string>
-    <string name="proxyhost">HTTP proxy hostname</string>
-    <string name="proxyport">HTTP proxy port</string>
-
-    <string name="packages">Packages (comma separated):</string>
     <string name="allowed">Allow</string>
     <string name="disallowed">Disallow</string>
 
-    <string name="connecting">ToyVPN is connecting...</string>
-    <string name="connected">ToyVPN is connected!</string>
-    <string name="disconnected">ToyVPN is disconnected!</string>
+    <string name="connecting">VPN is connecting...</string>
+    <string name="connected">VPN is connected!</string>
+    <string name="disconnected">VPN is disconnected!</string>
     <string name="incomplete_proxy_settings">
         Incomplete proxy settings. For HTTP proxy we require both hostname and port settings.
     </string>

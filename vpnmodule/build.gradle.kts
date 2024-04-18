@@ -62,6 +62,9 @@ android {
 }
 
 dependencies {
+    implementation(libs.okhttp)
+    implementation(libs.cronet.okhttp)
+    implementation(libs.play.services.cronet)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

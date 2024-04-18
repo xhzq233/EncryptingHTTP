@@ -2,21 +2,20 @@ package com.example.vpnmodule
 
 import android.content.Intent
 import android.content.SharedPreferences
-import android.content.pm.ResolveInfo
 import android.net.VpnService
 import android.os.Bundle
-import android.util.Log
+import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import java.net.URL
-import java.util.Arrays
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import com.google.android.gms.net.CronetProviderInstaller
 import java.util.stream.Collectors
 
 
@@ -71,8 +70,10 @@ class ShinVpnActivity : ComponentActivity() {
         }
     }
 
+    @OptIn(ExperimentalComposeUiApi::class)
     public override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        CronetProviderInstaller.installProvider(this)
         setContent {
             val packages = remember {
                 mutableStateOf("")
@@ -81,6 +82,8 @@ class ShinVpnActivity : ComponentActivity() {
                 mutableStateOf(true)
             }
 
+            val keyboardController = LocalSoftwareKeyboardController.current
+
             Column(
                 horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
                 verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
@@ -88,35 +91,20 @@ class ShinVpnActivity : ComponentActivity() {
             ) {
                 TextField(
                     value = packages.value,
+                    trailingIcon = {
+                             Button(onClick = {
+                                 currentFocus?.clearFocus()
+                                 keyboardController?.hide()
+                             }) {
+                                 Text("Done")
+                             }
+                    },
                     onValueChange = { packages.value = it },
-                    placeholder = { Text("Package names") })
-                Row {
-                    RadioButton(selected = allowed.value, onClick = { allowed.value = true })
-                    Text("Allow")
-                    RadioButton(selected = !allowed.value, onClick = { allowed.value = false })
-                    Text("Disallow")
-                }
+                    placeholder = { Text("Allowed Package names") }
+                )
                 ConnectButton(packages, allowed)
                 DisconnectButton()
 
-                Divider()
-
-                val testResponse = remember { mutableStateOf("") }
-
-                Button(onClick = {
-                    // Test connection
-                    Log.i("ShinProxyService", "Testing connection")
-
-                    Thread {
-                        // Get from http://cip.cc
-                        testResponse.value = URL("http://cip.cc").readText()
-                    }.start()
-                }) {
-                    // Test connection
-                    Text(text = "Test Connection")
-                }
-
-                Text(text = testResponse.value)
             }
         }
     }

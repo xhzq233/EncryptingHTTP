@@ -73,6 +73,7 @@ fun Request(client: OkHttpClient = OkHttpClient()) {
 
     Column {
         Button({
+            stringResp.value = "None"
             val req = Request.Builder()
                 .url("http://cip.cc")
                 .addHeader("User-Agent", "curl/8.4.0")
@@ -83,6 +84,7 @@ fun Request(client: OkHttpClient = OkHttpClient()) {
             Text(text = "Request HTTP")
         }
         Button({
+            stringResp.value = "None"
             val req = Request.Builder()
                 .url("https://cip.cc")
                 .addHeader("User-Agent", "curl/8.4.0")
@@ -91,12 +93,6 @@ fun Request(client: OkHttpClient = OkHttpClient()) {
             client.newCall(req).enqueue(callback)
         }) {
             Text(text = "Request HTTPS")
-        }
-        // Clear text
-        Button({
-            stringResp.value = "None"
-        }) {
-            Text(text = "Clear")
         }
         Divider()
         Text(

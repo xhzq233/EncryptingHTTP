@@ -41,7 +41,6 @@ class ShinVpnConnection(
     override fun run() {
         var iface: ParcelFileDescriptor? = null
         try {
-            Log.i(tag, "Starting")
             iface = parcelFileDescriptor()
             // Now we are connected. Set the flag.
 
@@ -61,8 +60,7 @@ class ShinVpnConnection(
                 if (length > 0) {
                     // Write the outgoing packet to the tunnel.
                     packet.limit(length)
-//                    val res = NativeLib().handleIpPkt(packet.array(), length)
-                    out.write(packet.array(), 0, length)
+                    NativeLib().handleIpPkt(packet.array(), length, iface.fd)
                 } else if (length < 0) {
                     throw IOException("Tunnel EOF")
                 }
@@ -79,6 +77,7 @@ class ShinVpnConnection(
             if (iface != null) {
                 try {
                     iface.close()
+                    ShinProxyService.deactivate()
                 } catch (e: IOException) {
                     Log.e(tag, "Unable to close interface", e)
                 }
@@ -94,19 +93,19 @@ class ShinVpnConnection(
         builder.addRoute("0.0.0.0", 0)
         builder.allowFamily(OsConstants.AF_INET)
 
-        //             Protect my package's traffic.
 //        builder.addDisallowedApplication(mService.packageName)
-        builder.addAllowedApplication("com.example.demoapp")
+//        builder.addAllowedApplication("com.example.demoapp")
 //        builder.addAllowedApplication(mService.packageName)
 
         builder.setSession(mService.getString(R.string.app_name))
 
+        builder.setBlocking(true)
         if (mConfigureIntent != null) {
             builder.setConfigureIntent(mConfigureIntent)
         }
         val proxyAddress = ShinProxyService.servingProxy.address() as InetSocketAddress
         builder.setHttpProxy(ProxyInfo.buildDirectProxy(proxyAddress.hostString, proxyAddress.port))
-        ShinProxyService.activate()
+        ShinProxyService.activate(context = mService)
 
         val vpnInterface: ParcelFileDescriptor? = builder.establish()
         if (mOnEstablishListener != null && vpnInterface != null) {
