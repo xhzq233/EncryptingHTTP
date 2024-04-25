@@ -19,11 +19,11 @@ android {
             useSupportLibrary = true
         }
 
-        externalNativeBuild {
-            cmake {
-                cppFlags("")
-            }
-        }
+//        externalNativeBuild {
+//            cmake {
+//                cppFlags("")
+//            }
+//        }
     }
 
     buildTypes {
@@ -35,12 +35,12 @@ android {
             )
         }
     }
-    externalNativeBuild {
-        cmake {
-            path("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
-    }
+//    externalNativeBuild {
+//        cmake {
+//            path("src/main/cpp/CMakeLists.txt")
+//            version = "3.22.1"
+//        }
+//    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8

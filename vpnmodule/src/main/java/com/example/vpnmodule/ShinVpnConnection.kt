@@ -60,7 +60,8 @@ class ShinVpnConnection(
                 if (length > 0) {
                     // Write the outgoing packet to the tunnel.
                     packet.limit(length)
-                    NativeLib().handleIpPkt(packet.array(), length, iface.fd)
+//                    out.write(packet.array(), packet.arrayOffset(), length)
+//                    NativeLib().handleIpPkt(packet.array(), length, iface.fd)
                 } else if (length < 0) {
                     throw IOException("Tunnel EOF")
                 }
@@ -94,7 +95,7 @@ class ShinVpnConnection(
         builder.allowFamily(OsConstants.AF_INET)
 
 //        builder.addDisallowedApplication(mService.packageName)
-//        builder.addAllowedApplication("com.example.demoapp")
+        builder.addAllowedApplication("com.example.demoapp")
 //        builder.addAllowedApplication(mService.packageName)
 
         builder.setSession(mService.getString(R.string.app_name))

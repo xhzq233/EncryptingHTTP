@@ -93,7 +93,8 @@ class ShinProxyService {
                 Log.i(TAG, "HTTPS Connected to ${server.remoteSocketAddress}")
 
                 // Send a 200 OK response to the client
-                clientOut.write("HTTP/1.1 200 Connection Established\r\n\r\n".toByteArray())
+                Log.d(TAG, "Sending ${header.version} 200 Connection Established")
+                clientOut.write("${header.version} 200 Connection Established\r\n\r\n".toByteArray())
                 val clientSideFuture = executors?.submit {
                     clientIn.copyTo(serverOut)
                 }
@@ -141,7 +142,6 @@ class ShinProxyService {
             clientOut.write(responseBuffer.toByteArray())
 
             response.body?.bytes()?.let {
-                Log.d(TAG, "Response body: ${String(it)}")
                 clientOut.write(it)
             }
             response.close()
@@ -170,7 +170,6 @@ class ShinProxyService {
                 }
                 builder.append(byte.toChar())
             }
-            Log.d(TAG, "Read line: $builder")
             return builder.toString()
         }
 
@@ -188,18 +187,19 @@ class ShinProxyService {
             val method = splits[0]
             val urlString = splits[1]
             val version = splits[2]
-            val url = if (!urlString.startsWith("http")) {
-                URL("https://$urlString")
-            } else URL(urlString)
+            if (method=="CONNECT") {
+                return HttpHead(version, method, URL("https://$urlString"), headers)
+            }
+            val url = URL(urlString)
 
             // Body
-            val body = if (headers.containsKey("Content-Length")) {
+            var body: ByteArray? = null
+            if (headers.containsKey("Content-Length")) {
                 val length = headers["Content-Length"]!!.toInt()
                 val buffer = ByteArray(length)
                 inputStream.read(buffer)
-                buffer
-            } else null
-
+                body = buffer
+            }
             val mediaType = if (headers.containsKey("Content-Type")) {
                 headers["Content-Type"]!!.toMediaTypeOrNull()
             } else null

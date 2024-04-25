@@ -30,6 +30,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
+import java.lang.StringBuilder
 import java.net.Socket
 
 
@@ -65,35 +66,39 @@ fun Request(client: OkHttpClient = OkHttpClient()) {
         }
 
         override fun onResponse(call: Call, response: Response) {
-            val res = response.body?.string() ?: ""
-            Log.i("DEMO", "onResponse $res")
-            stringResp.value = res
+            val sb = StringBuilder()
+            sb.append(response.toString())
+            if (response.handshake != null) {
+                sb.append("Handshake: ").append(response.handshake).append("\n")
+            }
+            sb.append(response.code).append(" ").append(response.message).append("\n")
+            response.headers.forEach {
+                sb.append(it.first).append(": ").append(it.second).append("\n")
+            }
+            sb.append("\n")
+            response.body?.string()?.let {
+                sb.append(it)
+            }
+            Log.i("DEMO", "onResponse\n$sb")
+            stringResp.value = sb.toString()
         }
     }
 
-    Column {
-        Button({
-            stringResp.value = "None"
-            val req = Request.Builder()
-                .url("http://cip.cc")
-                .addHeader("User-Agent", "curl/8.4.0")
-                .build()
+    fun request(url: String) {
+        stringResp.value = "None"
+        val req = Request.Builder()
+            .url(url)
+            .build()
 
-            client.newCall(req).enqueue(callback)
-        }) {
-            Text(text = "Request HTTP")
-        }
-        Button({
-            stringResp.value = "None"
-            val req = Request.Builder()
-                .url("https://cip.cc")
-                .addHeader("User-Agent", "curl/8.4.0")
-                .build()
+        client.newCall(req).enqueue(callback)
+    }
 
-            client.newCall(req).enqueue(callback)
-        }) {
-            Text(text = "Request HTTPS")
-        }
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Button({ request("http://http3.is") }) { Text(text = "Request HTTP") }
+        Button({ request("https://http2.pro/api/v1") }) { Text(text = "Request HTTPS(HTTP2)") }
+        Button({ request("https://http3.is") }) { Text(text = "Request HTTPS(HTTP3)") }
         Divider()
         Text(
             stringResp.value,

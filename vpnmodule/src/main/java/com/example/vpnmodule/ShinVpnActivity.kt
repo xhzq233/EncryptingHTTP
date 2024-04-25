@@ -4,18 +4,30 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.net.VpnService
 import android.os.Bundle
-import android.view.inputmethod.InputMethodManager
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import com.google.android.gms.net.CronetProviderInstaller
+import com.google.net.cronet.okhttptransport.CronetCallFactory
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.Request
+import okhttp3.Response
+import okio.IOException
+import org.chromium.net.CronetEngine
 import java.util.stream.Collectors
 
 
@@ -69,6 +81,43 @@ class ShinVpnActivity : ComponentActivity() {
             Text("Disconnect")
         }
     }
+    @Composable
+    fun TestHTTP3ConnectionButton() {
+        Button(onClick = {
+            val cronetEngine = CronetEngine.Builder(this).enableQuic(true).build()
+
+            val callFactory = CronetCallFactory.newBuilder(cronetEngine).build()
+
+            val request = Request.Builder()
+                .url("https://xhzq.xyz:8889/test")
+                .build()
+
+            callFactory.newCall(request).enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    Log.e("DEMO", "onFailure", e)
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    val sb = StringBuilder()
+                    sb.append(response.toString())
+                    if (response.handshake != null) {
+                        sb.append("Handshake: ").append(response.handshake).append("\n")
+                    }
+                    sb.append(response.code).append(" ").append(response.message).append("\n")
+                    response.headers.forEach {
+                        sb.append(it.first).append(": ").append(it.second).append("\n")
+                    }
+                    sb.append("\n")
+                    response.body?.string()?.let {
+                        sb.append(it)
+                    }
+                    Log.i("DEMO", "onResponse\n$sb")
+                }
+            })
+        }) {
+            Text("Test HTTP/3 Connection")
+        }
+    }
 
     @OptIn(ExperimentalComposeUiApi::class)
     public override fun onCreate(savedInstanceState: Bundle?) {
@@ -104,7 +153,7 @@ class ShinVpnActivity : ComponentActivity() {
                 )
                 ConnectButton(packages, allowed)
                 DisconnectButton()
-
+                TestHTTP3ConnectionButton()
             }
         }
     }
