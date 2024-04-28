@@ -1,0 +1,117 @@
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    # https://github.com/FiloSottile/mkcert#installation
+    - name: Install and setup mkcert
+      env:
+        MKCERT_VERSION: v1.4.3
+      run: |
+        set -x
+        sudo apt-get update && \
+          sudo apt-get install -y libnss3-tools
+
+        curl https://github.com/FiloSottile/mkcert/releases/download/${MKCERT_VERSION}/mkcert-${MKCERT_VERSION}-linux-amd64 --location --output /tmp/mkcert
+        chmod 744 /tmp/mkcert
+        sudo mv /tmp/mkcert /bin/mkcert
+
+        mkcert -install
+
+    - name: Create signed TLS certificates for localhost
+      run: |
+        mkcert -cert-file tests/localhost.crt -key-file tests/localhost.key localhost 0.0.0.0 ::1
+
+    # https://github.com/marketplace/actions/build-and-push-docker-images
+    - name: Build the Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        tags: macbre/nginx
+        cache-from: |
+          ghcr.io/macbre/nginx-http3:latest
+
+    - name: Lint the Dockerfile
+      uses: hadolint/hadolint-action@v3.1.0
+      with:
+        dockerfile: Dockerfile
+
+    - name: Inspect images
+      run: |
+        docker images | head -n3
+
+    - name: Are we running as non-root?
+      run: |
+        docker run --rm -t macbre/nginx whoami | grep nginx
+
+    - name: Run nginx -V and njs -v
+      run: |
+        docker run --rm -t macbre/nginx nginx -V | sed 's/\-\-/\n\t--/g' | tee
+        echo "njs v$(docker run -t macbre/nginx njs -v)"
+
+    - name: Serve a static asset
+      run: |
+        # expand commands
+        set -x
+
+        ./run-docker.sh &
+
+        sleep 2; docker ps
+        curl -v --compressed localhost:8888 2>&1 | tee /tmp/out
+
+        grep --fixed-strings --invert-match -i '< Server: nginx' /tmp/out > /dev/null
+        grep --fixed-strings '< Content-Encoding: br' /tmp/out
+        grep --fixed-strings '<p>It works!</p>' /tmp/out
+
+
+        curl -v --compressed localhost:8888/FooBar 2>&1 | tee /tmp/out
+
+        grep --fixed-strings 'HTTP/1.1 301 Moved Permanently' /tmp/out
+        grep --fixed-strings '< x-rewrite: 1' /tmp/out
+        grep --fixed-strings '< Location: http://localhost/foobar' /tmp/out
+
+    - name: Check njs module
+      run: |
+        set -x
+
+        curl -v --compressed -H 'Host: njs' localhost:8888/hello 2>&1 | tee /tmp/out
+        grep --fixed-strings '< x-njs: 1' /tmp/out
+        grep 'Hello world from njs' /tmp/out
+
+    - name: http2 vs h3
+      run: |
+        set -x
+
+        curl -v --compressed https://localhost:8889 2>&1 | tee /tmp/h2
+
+        grep --fixed-strings '< HTTP/2 200' /tmp/h2
+        grep --fixed-strings --invert-match -i '< server: nginx' /tmp/h2 > /dev/null
+        grep --fixed-strings '<p>It works!</p>' /tmp/h2
+
+
+        docker run --rm --network host ghcr.io/macbre/curl-http3 \
+          curl -v --insecure https://localhost:8889 --http3 --max-time 5 2>&1 | tee /tmp/h3
+
+        grep --fixed-strings '< HTTP/3 200' /tmp/h3
+        grep --fixed-strings --invert-match -i '< server: nginx' /tmp/h3 > /dev/null
+        grep --fixed-strings '< alt-svc: h3=":8889"; ma=86400' /tmp/h3
+        grep --fixed-strings '< quic-status: h3' /tmp/h3
+        grep --fixed-strings '<p>It works!</p>' /tmp/h3
+
+    - name: Test njs command line
+      run: |
+        echo "console.log('Using njs v' + njs.version)" | docker run -i --rm macbre/nginx njs -q - | grep "Using njs v0.8.3"
+
+    - name: Show logs
+      if: always()
+      run: docker logs test_nginx
