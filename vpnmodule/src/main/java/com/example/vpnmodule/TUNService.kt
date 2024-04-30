@@ -14,13 +14,12 @@ import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
-class ShinVpnService : VpnService() {
+class TUNService : VpnService() {
     private class Connection(thread: Thread?, pfd: ParcelFileDescriptor?) :
         Pair<Thread?, ParcelFileDescriptor?>(thread, pfd)
 
     private val mConnectingThread = AtomicReference<Thread?>()
     private val mConnection = AtomicReference<Connection?>()
-    private val mNextConnectionId = AtomicInteger(1)
     private var mConfigureIntent: PendingIntent? = null
     override fun onCreate() {
 
@@ -28,7 +27,7 @@ class ShinVpnService : VpnService() {
         mConfigureIntent = PendingIntent
             .getActivity(
                 this, 0,
-                Intent(this, ShinVpnActivity::class.java),
+                Intent(this, TUNActivity::class.java),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
     }
@@ -53,13 +52,12 @@ class ShinVpnService : VpnService() {
         notifyUser(R.string.connecting)
 
         // Extract information from the shared preferences.
-        val prefs = getSharedPreferences(ShinVpnActivity.Prefs.NAME, MODE_PRIVATE)
-        val allow = prefs.getBoolean(ShinVpnActivity.Prefs.ALLOW, true)
-        val packages: Set<String> = prefs.getStringSet(ShinVpnActivity.Prefs.PACKAGES, emptySet<String>())!!
+        val prefs = getSharedPreferences(TUNActivity.Prefs.NAME, MODE_PRIVATE)
+        val allow = prefs.getBoolean(TUNActivity.Prefs.ALLOW, true)
+        val packages: Set<String> = prefs.getStringSet(TUNActivity.Prefs.PACKAGES, emptySet<String>())!!
 
-        val connection = ShinVpnConnection(
-            this, mNextConnectionId.getAndIncrement(),
-            allow, packages, mConfigureIntent
+        val connection = TUNConnection(
+            this, allow, packages, mConfigureIntent
         )
 
         // Replace any existing connecting thread with the  new one.
@@ -78,7 +76,7 @@ class ShinVpnService : VpnService() {
 
     private fun notifyUser(res: Int) {
         mainExecutor.execute {
-            Toast.makeText(this@ShinVpnService, res, Toast.LENGTH_SHORT).show()
+            Toast.makeText(this@TUNService, res, Toast.LENGTH_SHORT).show()
             updateForegroundNotification(res)
         }
     }
@@ -128,7 +126,7 @@ class ShinVpnService : VpnService() {
     }
 
     companion object {
-        private val TAG = ShinVpnService::class.java.simpleName
+        private val TAG = TUNService::class.java.simpleName
         const val ACTION_CONNECT = "com.example.vpnmodule.START"
         const val ACTION_DISCONNECT = "com.example.vpnmodule.STOP"
         const val NOTIFICATION_CHANNEL_ID = "ShinVpn"

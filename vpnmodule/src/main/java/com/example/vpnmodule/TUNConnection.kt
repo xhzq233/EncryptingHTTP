@@ -15,9 +15,8 @@ import java.nio.ByteBuffer
 
 typealias onEstablishHandler = (ParcelFileDescriptor) -> Unit
 
-class ShinVpnConnection(
+class TUNConnection(
     private val mService: VpnService,
-    private val mConnectionId: Int,
     allow: Boolean,
     packages: Set<String>,
     private val mConfigureIntent: PendingIntent?
@@ -28,6 +27,7 @@ class ShinVpnConnection(
     // Allowed/Disallowed packages for VPN usage
     private val mAllow: Boolean
     private val mPackages: Set<String>
+    private val nativeLib = NativeLib()
 
     init {
         mAllow = allow
@@ -61,7 +61,7 @@ class ShinVpnConnection(
                     // Write the outgoing packet to the tunnel.
                     packet.limit(length)
 //                    out.write(packet.array(), packet.arrayOffset(), length)
-//                    NativeLib().handleIpPkt(packet.array(), length, iface.fd)
+                    nativeLib.handleIpPkt(packet.array(), length, iface.fd)
                 } else if (length < 0) {
                     throw IOException("Tunnel EOF")
                 }
@@ -118,7 +118,7 @@ class ShinVpnConnection(
     }
 
     private val tag: String
-        get() = ShinVpnConnection::class.java.simpleName + "[" + mConnectionId + "]"
+        get() = TUNConnection::class.java.simpleName
 
     companion object {
         /**

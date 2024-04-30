@@ -15,7 +15,7 @@
         android:theme="@style/Theme.DemoApp"
         android:usesCleartextTraffic="true">
         <activity
-            android:name=".ShinVpnActivity"
+            android:name=".TUNActivity"
             android:exported="true"
             android:theme="@style/Theme.DemoApp">
             <intent-filter>
@@ -27,7 +27,7 @@
 
 
         <service
-            android:name=".ShinVpnService"
+            android:name=".TUNService"
             android:exported="false"
             android:foregroundServiceType="specialUse"
             android:permission="android.permission.BIND_VPN_SERVICE">

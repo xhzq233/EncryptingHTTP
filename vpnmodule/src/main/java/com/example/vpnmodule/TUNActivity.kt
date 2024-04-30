@@ -31,7 +31,7 @@ import org.chromium.net.CronetEngine
 import java.util.stream.Collectors
 
 
-class ShinVpnActivity : ComponentActivity() {
+class TUNActivity : ComponentActivity() {
     interface Prefs {
         companion object {
             const val NAME = "connection"
@@ -75,7 +75,7 @@ class ShinVpnActivity : ComponentActivity() {
     fun DisconnectButton() {
         Button(onClick = {
             startService(
-                serviceIntent.setAction(ShinVpnService.ACTION_DISCONNECT)
+                serviceIntent.setAction(TUNService.ACTION_DISCONNECT)
             )
         }) {
             Text("Disconnect")
@@ -174,12 +174,12 @@ class ShinVpnActivity : ComponentActivity() {
 
     override fun onActivityResult(request: Int, result: Int, data: Intent?) {
         if (result == RESULT_OK) {
-            startService(serviceIntent.setAction(ShinVpnService.ACTION_CONNECT))
+            startService(serviceIntent.setAction(TUNService.ACTION_CONNECT))
         }
         super.onActivityResult(request, result, data)
     }
 
     private val serviceIntent: Intent
-        get() = Intent(this, ShinVpnService::class.java)
+        get() = Intent(this, TUNService::class.java)
 }
 
