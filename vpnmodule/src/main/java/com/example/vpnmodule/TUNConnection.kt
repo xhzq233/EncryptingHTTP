@@ -7,32 +7,22 @@ import android.os.ParcelFileDescriptor
 import android.system.OsConstants
 import android.util.Log
 import java.io.FileInputStream
-import java.io.FileOutputStream
 import java.io.IOException
 import java.net.InetSocketAddress
-import java.net.SocketException
-import java.nio.ByteBuffer
 
 typealias onEstablishHandler = (ParcelFileDescriptor) -> Unit
 
 class TUNConnection(
-    private val mService: VpnService,
-    allow: Boolean,
-    packages: Set<String>,
-    private val mConfigureIntent: PendingIntent?
+    private val vpnService: VpnService,
+    // Allowed/Disallowed packages for VPN usage
+    private val allow: Boolean,
+    private val packages: Set<String>,
+    private val configureIntent: PendingIntent?
 ) : Runnable {
 
     private var mOnEstablishListener: onEstablishHandler? = null
 
-    // Allowed/Disallowed packages for VPN usage
-    private val mAllow: Boolean
-    private val mPackages: Set<String>
     private val nativeLib = NativeLib()
-
-    init {
-        mAllow = allow
-        mPackages = packages
-    }
 
     fun setOnEstablishListener(listener: onEstablishHandler?) {
         mOnEstablishListener = listener
@@ -47,33 +37,21 @@ class TUNConnection(
             // Packets to be sent are queued in this input stream.
             val `in` = FileInputStream(iface!!.fileDescriptor)
 
-            // Packets received need to be written to this output stream.
-            val out = FileOutputStream(iface.fileDescriptor)
-
             // Allocate the buffer for a single packet.
-            val packet = ByteBuffer.allocate(MAX_PACKET_SIZE)
+            val packet = ByteArray(MAX_PACKET_SIZE)
 
             // We keep forwarding packets till something goes wrong.
             while (true) {
                 // Read the outgoing packet from the input stream.
-                val length = `in`.read(packet.array())
+                val length = `in`.read(packet)
                 if (length > 0) {
-                    // Write the outgoing packet to the tunnel.
-                    packet.limit(length)
-//                    out.write(packet.array(), packet.arrayOffset(), length)
-                    nativeLib.handleIpPkt(packet.array(), length, iface.fd)
+                    nativeLib.handleIpPkt(packet, length, iface.fd)
                 } else if (length < 0) {
                     throw IOException("Tunnel EOF")
                 }
             }
-        } catch (e: IOException) {
+        } catch (e: Exception) {
             Log.e(tag, "Connection failed, exiting", e)
-        } catch (e: InterruptedException) {
-            Log.e(tag, "Connection failed, exiting", e)
-        } catch (e: IllegalArgumentException) {
-            Log.e(tag, "Connection failed, exiting", e)
-        } catch (e: SocketException) {
-            Log.e(tag, "Cannot use socket", e)
         } finally {
             if (iface != null) {
                 try {
@@ -89,24 +67,32 @@ class TUNConnection(
 
     private fun parcelFileDescriptor(): ParcelFileDescriptor? {
         // Configure a builder while parsing the parameters.
-        val builder = mService.Builder()
+        val builder = vpnService.Builder()
         builder.addAddress("192.168.0.1", 16)
         builder.addRoute("0.0.0.0", 0)
         builder.allowFamily(OsConstants.AF_INET)
 
-//        builder.addDisallowedApplication(mService.packageName)
-        builder.addAllowedApplication("com.example.demoapp")
-//        builder.addAllowedApplication(mService.packageName)
+        try {
+            if (allow) {
+                packages.forEach { builder.addAllowedApplication(it) }
+                // For debugging purposes
+                if (!packages.contains("com.example.demoapp")) builder.addAllowedApplication("com.example.demoapp")
+            } else {
+                packages.forEach { builder.addDisallowedApplication(it) }
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "Package not found", e)
+        }
 
-        builder.setSession(mService.getString(R.string.app_name))
+        builder.setSession(vpnService.getString(R.string.app_name))
 
         builder.setBlocking(true)
-        if (mConfigureIntent != null) {
-            builder.setConfigureIntent(mConfigureIntent)
+        if (configureIntent != null) {
+            builder.setConfigureIntent(configureIntent)
         }
         val proxyAddress = ShinProxyService.servingProxy.address() as InetSocketAddress
         builder.setHttpProxy(ProxyInfo.buildDirectProxy(proxyAddress.hostString, proxyAddress.port))
-        ShinProxyService.activate(context = mService)
+        ShinProxyService.activate(context = vpnService)
 
         val vpnInterface: ParcelFileDescriptor? = builder.establish()
         if (mOnEstablishListener != null && vpnInterface != null) {
@@ -117,8 +103,7 @@ class TUNConnection(
         return vpnInterface
     }
 
-    private val tag: String
-        get() = TUNConnection::class.java.simpleName
+    private val tag: String get() = TUNConnection::class.java.simpleName
 
     companion object {
         /**

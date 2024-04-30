@@ -46,16 +46,13 @@ class TUNActivity : ComponentActivity() {
 
     @Composable
     fun ConnectButton(packages: State<String>, allowed: State<Boolean>) {
-
         Button(onClick = {
             val packageSet = packages.value.split(",").dropLastWhile { it.isEmpty() }
                 .map { obj: String -> obj.trim { it <= ' ' } }
                 .filter { s: String -> s.isNotEmpty() }
                 .toSet()
+            if (!checkPackages(packageSet)) return@Button
 
-            if (!checkPackages(packageSet)) {
-                return@Button
-            }
             prefs.edit()
                 .putBoolean(Prefs.ALLOW, allowed.value)
                 .putStringSet(Prefs.PACKAGES, packageSet)
@@ -73,49 +70,8 @@ class TUNActivity : ComponentActivity() {
 
     @Composable
     fun DisconnectButton() {
-        Button(onClick = {
-            startService(
-                serviceIntent.setAction(TUNService.ACTION_DISCONNECT)
-            )
-        }) {
+        Button(onClick = { startService(serviceIntent.setAction(TUNService.ACTION_DISCONNECT)) }) {
             Text("Disconnect")
-        }
-    }
-    @Composable
-    fun TestHTTP3ConnectionButton() {
-        Button(onClick = {
-            val cronetEngine = CronetEngine.Builder(this).enableQuic(true).build()
-
-            val callFactory = CronetCallFactory.newBuilder(cronetEngine).build()
-
-            val request = Request.Builder()
-                .url("https://xhzq.xyz:8889/test")
-                .build()
-
-            callFactory.newCall(request).enqueue(object : Callback {
-                override fun onFailure(call: Call, e: IOException) {
-                    Log.e("DEMO", "onFailure", e)
-                }
-
-                override fun onResponse(call: Call, response: Response) {
-                    val sb = StringBuilder()
-                    sb.append(response.toString())
-                    if (response.handshake != null) {
-                        sb.append("Handshake: ").append(response.handshake).append("\n")
-                    }
-                    sb.append(response.code).append(" ").append(response.message).append("\n")
-                    response.headers.forEach {
-                        sb.append(it.first).append(": ").append(it.second).append("\n")
-                    }
-                    sb.append("\n")
-                    response.body?.string()?.let {
-                        sb.append(it)
-                    }
-                    Log.i("DEMO", "onResponse\n$sb")
-                }
-            })
-        }) {
-            Text("Test HTTP/3 Connection")
         }
     }
 
@@ -124,12 +80,8 @@ class TUNActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         CronetProviderInstaller.installProvider(this)
         setContent {
-            val packages = remember {
-                mutableStateOf("")
-            }
-            val allowed = remember {
-                mutableStateOf(true)
-            }
+            val packages = remember { mutableStateOf("") }
+            val allowed = remember { mutableStateOf(true) }
 
             val keyboardController = LocalSoftwareKeyboardController.current
 
@@ -141,31 +93,27 @@ class TUNActivity : ComponentActivity() {
                 TextField(
                     value = packages.value,
                     trailingIcon = {
-                             Button(onClick = {
-                                 currentFocus?.clearFocus()
-                                 keyboardController?.hide()
-                             }) {
-                                 Text("Done")
-                             }
+                        Button(onClick = {
+                            currentFocus?.clearFocus()
+                            keyboardController?.hide()
+                        }) {
+                            Text("Done")
+                        }
                     },
                     onValueChange = { packages.value = it },
                     placeholder = { Text("Allowed Package names") }
                 )
                 ConnectButton(packages, allowed)
                 DisconnectButton()
-                TestHTTP3ConnectionButton()
             }
         }
     }
 
     private fun checkPackages(packageNames: Set<String>): Boolean {
-
         val apps = packageManager.getInstalledPackages(0).stream()
             .map { it.packageName }
             .collect(Collectors.toSet())
-
         val hasCorrectPackageNames = packageNames.isEmpty() || apps.containsAll(packageNames)
-
         if (!hasCorrectPackageNames) {
             Toast.makeText(this, R.string.unknown_package_names, Toast.LENGTH_SHORT).show()
         }
@@ -179,7 +127,6 @@ class TUNActivity : ComponentActivity() {
         super.onActivityResult(request, result, data)
     }
 
-    private val serviceIntent: Intent
-        get() = Intent(this, TUNService::class.java)
+    private val serviceIntent: Intent get() = Intent(this, TUNService::class.java)
 }
 
