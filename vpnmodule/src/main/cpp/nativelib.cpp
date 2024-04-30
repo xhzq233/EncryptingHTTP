@@ -1,24 +1,4 @@
-#include <jni.h>
-#include <string>
-#include <linux/socket.h>
-#include <netinet/ip.h>
-#include <netinet/udp.h>
-#include <netinet/tcp.h>
-#include <android/log.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <sys/epoll.h>
-#include <unordered_map>
-
-#define LOG_TAG "TUNService_NATIVE"
-#define DEFAULT_RECV_BUF_LEN 4096
-
-#define ip_to_str(ip, addr) \
-char addr[INET_ADDRSTRLEN]; \
-inet_ntop(AF_INET, &ip, addr, INET_ADDRSTRLEN)
-
-#define LOG_DEBUG(fmt, ...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, fmt, ##__VA_ARGS__)
-#define LOG_ERROR(fmt, ...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, fmt, ##__VA_ARGS__)
+#include "naticelib.h"
 
 void send_by_raw(int32_t pkt_length, jint tun_fd, iphdr *ip_header) {
     auto socket_fd = socket(AF_INET, SOCK_RAW, IPPROTO_IP);
@@ -116,32 +96,12 @@ void send_udp(jint tun_fd, iphdr *ip_header) {
     }
 }
 
-#define TUN_IP "192.168.0.1"
-#define TUN_LISTEN_PORT 23333
-#define MAX_CONN 16
+
 // tun src(ip, port) -> dst(ip, port)
 // change to
 // dst(ip, port) -> (TUN_IP, TUN_LISTEN_PORT)
 // and save dst(ip, port) -> tun src(ip, port) to map
-static std::unordered_map<uint64_t, uint64_t> ip_port_map;
-
-void epoll_ctl_add(int epfd, int fd, uint32_t events) {
-    struct epoll_event ev;
-    ev.events = events;
-    ev.data.fd = fd;
-    if (epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &ev) == -1) {
-        perror("epoll_ctl()\n");
-        exit(1);
-    }
-}
-
-static int setnonblocking(int sockfd) {
-    if (fcntl(sockfd, F_SETFL, fcntl(sockfd, F_GETFL, 0) | O_NONBLOCK) ==
-        -1) {
-        return -1;
-    }
-    return 0;
-}
+static std::unordered_map<ip_port_t, ip_port_t> ip_port_map;
 
 [[noreturn]] void listen_tun_tcp() {
     int listen_sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -173,7 +133,7 @@ static int setnonblocking(int sockfd) {
     epfd = epoll_create(1);
     char buf[DEFAULT_RECV_BUF_LEN];
     epoll_ctl_add(epfd, listen_sock, EPOLLIN | EPOLLOUT | EPOLLET);
-    int client_socklen = sizeof(client_addr);
+    socklen_t client_socklen = sizeof(client_addr);
     int number_fds;
     int recv_len;
     int conn_sock;
@@ -227,18 +187,11 @@ static int setnonblocking(int sockfd) {
     }
 }
 
-struct ip_port {
-    uint64_t ip: 32,
-            port: 16,
-            padding: 16;
-};
-
-#define TO_IP_PORT(ip, port) (uint64_t) (port) << 32 | (ip)
 
 void send_tcp_by_loopback(jint tun_fd, iphdr *ip_header, int pkt_length) {
     tcphdr *tcp_header = (tcphdr *) ((char *) ip_header + ip_header->ihl * 4);
-    uint64_t src_ip_port = TO_IP_PORT(ip_header->saddr, tcp_header->source);
-    uint64_t dst_ip_port = TO_IP_PORT(ip_header->daddr, tcp_header->dest);
+    ip_port_t src_ip_port = TO_IP_PORT(ip_header->saddr, tcp_header->source);
+    ip_port_t dst_ip_port = TO_IP_PORT(ip_header->daddr, tcp_header->dest);
     ip_port_map[dst_ip_port] = src_ip_port;
 
     ip_header->saddr = ip_header->daddr;
