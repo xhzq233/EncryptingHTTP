@@ -1,11 +1,20 @@
 #include "naticelib.h"
 
+// CAP_NET_RAW or root permission
 void send_by_raw(int32_t pkt_length, jint tun_fd, iphdr *ip_header) {
     auto socket_fd = socket(AF_INET, SOCK_RAW, IPPROTO_IP);
     if (socket_fd < 0) {
         LOG_ERROR("Failed to create raw socket %d", socket_fd);
         return;
     }
+    ifreq ifr;
+
+    memset(&ifr, 0, sizeof(ifr));
+    snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "eth0");
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_BINDTODEVICE, (void *)&ifr, sizeof(ifr)) < 0) {
+        LOG_ERROR("Failed to bind to device %s", ifr.ifr_name);
+    }
+
     sockaddr_in dest_addr;
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = 0;
@@ -101,7 +110,7 @@ void send_udp(jint tun_fd, iphdr *ip_header) {
 // change to
 // dst(ip, port) -> (TUN_IP, TUN_LISTEN_PORT)
 // and save dst(ip, port) -> tun src(ip, port) to map
-static std::unordered_map<ip_port_t, ip_port_t> ip_port_map;
+static std::unordered_map<ip_port_t, ip_port_t> dst_src_map;
 
 [[noreturn]] void listen_tun_tcp() {
     int listen_sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -188,11 +197,11 @@ static std::unordered_map<ip_port_t, ip_port_t> ip_port_map;
 }
 
 
-void send_tcp_by_loopback(jint tun_fd, iphdr *ip_header, int pkt_length) {
+void send_tcp_to_loopback(jint tun_fd, iphdr *ip_header, int pkt_length) {
     tcphdr *tcp_header = (tcphdr *) ((char *) ip_header + ip_header->ihl * 4);
     ip_port_t src_ip_port = TO_IP_PORT(ip_header->saddr, tcp_header->source);
     ip_port_t dst_ip_port = TO_IP_PORT(ip_header->daddr, tcp_header->dest);
-    ip_port_map[dst_ip_port] = src_ip_port;
+    dst_src_map[dst_ip_port] = src_ip_port;
 
     ip_header->saddr = ip_header->daddr;
     tcp_header->source = tcp_header->dest;
@@ -228,8 +237,23 @@ Java_com_example_vpnmodule_NativeLib_handleIpPkt(JNIEnv *env, jobject thiz, jbyt
               src_str, dest_str,
               ip_header->protocol, ip_header->tot_len, length);
 
-    // Open a raw socket and send the packet
-    send_by_raw(length, tun_fd, ip_header);
+    // check root permission
+    if (getuid() == 0) {
+        LOG_DEBUG("Using root permission");
+        send_by_raw(length, tun_fd, ip_header);
+    } else {
+        switch (ip_header->protocol) {
+            case IPPROTO_TCP:
+                send_tcp_to_loopback(tun_fd, ip_header, length);
+                break;
+            case IPPROTO_UDP:
+                send_udp(tun_fd, ip_header);
+                break;
+            default:
+                LOG_ERROR("Unsupported protocol %d", ip_header->protocol);
+                break;
+        }
+    }
 
     env->ReleaseByteArrayElements(ip_pkt, ip_pkt_ptr, 0);
     return;
