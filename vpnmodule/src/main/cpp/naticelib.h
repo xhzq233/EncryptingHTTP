@@ -35,6 +35,8 @@ struct ip_port {
 typedef uint64_t ip_port_t;
 
 #define TO_IP_PORT(ip, port) (ip_port_t) (port) << 32 | (ip)
+#define GET_IP(ip_port) (uint32_t) (ip_port)
+#define GET_PORT(ip_port) (uint16_t) (ip_port >> 32)
 
 void epoll_ctl_add(int epfd, int fd, uint32_t events) {
     struct epoll_event ev;

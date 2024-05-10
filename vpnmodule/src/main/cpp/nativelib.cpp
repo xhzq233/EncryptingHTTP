@@ -11,7 +11,7 @@ void send_by_raw(int32_t pkt_length, jint tun_fd, iphdr *ip_header) {
 
     memset(&ifr, 0, sizeof(ifr));
     snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "eth0");
-    if (setsockopt(socket_fd, SOL_SOCKET, SO_BINDTODEVICE, (void *)&ifr, sizeof(ifr)) < 0) {
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_BINDTODEVICE, (void *) &ifr, sizeof(ifr)) < 0) {
         LOG_ERROR("Failed to bind to device %s", ifr.ifr_name);
     }
 
@@ -53,7 +53,7 @@ void send_udp(jint tun_fd, iphdr *ip_header) {
         LOG_ERROR("Failed to create udp socket %d", socket_fd);
         return;
     }
-    udphdr *udp_header = (udphdr *) ((char *) ip_header + ip_header->ihl * 4);
+    udphdr *udp_header = (udphdr * )((char *) ip_header + ip_header->ihl * 4);
     sockaddr_in dest_addr;
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = udp_header->dest;
@@ -88,7 +88,7 @@ void send_udp(jint tun_fd, iphdr *ip_header) {
             new_iphr->daddr = ip_header->saddr;
             new_iphr->saddr = ip_header->daddr;
             new_iphr->tot_len = htons(total_len);
-            auto new_udphr = (udphdr *) (sendbuf + ip_len);
+            auto new_udphr = (udphdr * )(sendbuf + ip_len);
             memcpy(new_udphr, udp_header, udp_len);
             new_udphr->dest = udp_header->source;
             new_udphr->source = udp_header->dest;
@@ -105,12 +105,14 @@ void send_udp(jint tun_fd, iphdr *ip_header) {
     }
 }
 
+// Send payload to dst(ip, port) and write the response to socket
+void handle_tcp_payload(void *payload, int payload_len, int socket, int32_t dst_ip, int16_t dst_port);
 
 // tun src(ip, port) -> dst(ip, port)
 // change to
 // dst(ip, port) -> (TUN_IP, TUN_LISTEN_PORT)
 // and save dst(ip, port) -> tun src(ip, port) to map
-static std::unordered_map<ip_port_t, ip_port_t> dst_src_map;
+static std::unordered_map <ip_port_t, ip_port_t> dst_src_map;
 
 [[noreturn]] void listen_tun_tcp() {
     int listen_sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -125,7 +127,7 @@ static std::unordered_map<ip_port_t, ip_port_t> dst_src_map;
     addr.sin_port = htons(TUN_LISTEN_PORT);
     addr.sin_addr.s_addr = inet_addr(TUN_IP);
 
-    int res = bind(listen_sock, (sockaddr *) &addr, sizeof(addr));
+    int res = bind(listen_sock, (sockaddr * ) & addr, sizeof(addr));
     if (res < 0) {
         LOG_ERROR("Failed to bind socket %d", res);
         exit(1);
@@ -147,6 +149,7 @@ static std::unordered_map<ip_port_t, ip_port_t> dst_src_map;
     int recv_len;
     int conn_sock;
     struct epoll_event events[MAX_CONN];
+    std::unordered_map<int, ip_port_t> fd_ip_port_map;
 
     for (;;) {
         number_fds = epoll_wait(epfd, events, MAX_CONN, -1);
@@ -162,6 +165,8 @@ static std::unordered_map<ip_port_t, ip_port_t> dst_src_map;
                           buf, sizeof(client_addr));
                 LOG_DEBUG("[+] connected with %s:%d\n", buf,
                           ntohs(client_addr.sin_port));
+                fd_ip_port_map[conn_sock] = TO_IP_PORT(client_addr.sin_addr.s_addr,
+                                                       client_addr.sin_port);
 
                 setnonblocking(conn_sock);
                 epoll_ctl_add(epfd, conn_sock,
@@ -177,8 +182,11 @@ static std::unordered_map<ip_port_t, ip_port_t> dst_src_map;
                         break;
                     } else {
                         LOG_DEBUG("[+] data: %s\n", buf);
-                        write(events[i].data.fd, buf,
-                              strlen(buf));
+                        auto dst_ip_port = fd_ip_port_map[events[i].data.fd];
+                        int32_t dst_ip = GET_IP(dst_ip_port);
+                        int16_t dst_port = GET_PORT(dst_ip_port);
+                        handle_tcp_payload(buf, recv_len,
+                                           events[i].data.fd, dst_ip, dst_port);
                     }
                 }
             } else {
@@ -197,21 +205,45 @@ static std::unordered_map<ip_port_t, ip_port_t> dst_src_map;
 }
 
 
-void send_tcp_to_loopback(jint tun_fd, iphdr *ip_header, int pkt_length) {
-    tcphdr *tcp_header = (tcphdr *) ((char *) ip_header + ip_header->ihl * 4);
-    ip_port_t src_ip_port = TO_IP_PORT(ip_header->saddr, tcp_header->source);
-    ip_port_t dst_ip_port = TO_IP_PORT(ip_header->daddr, tcp_header->dest);
-    dst_src_map[dst_ip_port] = src_ip_port;
+void send_tcp(jint tun_fd, iphdr *ip_header, int pkt_length) {
+    tcphdr *tcp_header = (tcphdr * )((char *) ip_header + ip_header->ihl * 4);
 
-    ip_header->saddr = ip_header->daddr;
-    tcp_header->source = tcp_header->dest;
-    ip_header->daddr = inet_addr(TUN_IP);
-    tcp_header->dest = htons(TUN_LISTEN_PORT);
+    if(ip_header->saddr == inet_addr(TUN_IP) && ntohs(tcp_header->source) == TUN_LISTEN_PORT) {
+        LOG_DEBUG("Recv from loopback, send to tun_fd");
+        // change to dst(ip: port) -> src(ip: port)
+        ip_port_t dst_ip_port = TO_IP_PORT(ip_header->daddr, tcp_header->dest);
+        auto it = dst_src_map.find(dst_ip_port);
+        if (it == dst_src_map.end()) {
+            LOG_ERROR("No corresponding src ip port found");
+            return;
+        }
+        ip_port_t src_ip_port = it->second;
 
-    // Send the packet
-    auto res = write(tun_fd, ip_header, pkt_length);
-    if (res < 0) {
-        LOG_ERROR("Failed to write packet to tun_fd");
+        ip_header->saddr = ip_header->daddr;
+        tcp_header->source = tcp_header->dest;
+        ip_header->daddr = GET_IP(src_ip_port);
+        tcp_header->dest = GET_PORT(src_ip_port);
+
+        // Send the packet to tun_fd
+        auto res = write(tun_fd, ip_header, pkt_length);
+        if (res < 0) {
+            LOG_ERROR("Failed to write packet to tun_fd");
+        }
+    } else {
+        ip_port_t src_ip_port = TO_IP_PORT(ip_header->saddr, tcp_header->source);
+        ip_port_t dst_ip_port = TO_IP_PORT(ip_header->daddr, tcp_header->dest);
+        dst_src_map[dst_ip_port] = src_ip_port;
+
+        ip_header->saddr = ip_header->daddr;
+        tcp_header->source = tcp_header->dest;
+        ip_header->daddr = inet_addr(TUN_IP);
+        tcp_header->dest = htons(TUN_LISTEN_PORT);
+
+        // Send the packet to loopback
+        auto res = write(tun_fd, ip_header, pkt_length);
+        if (res < 0) {
+            LOG_ERROR("Failed to write packet to tun_fd");
+        }
     }
 }
 
@@ -244,7 +276,7 @@ Java_com_example_vpnmodule_NativeLib_handleIpPkt(JNIEnv *env, jobject thiz, jbyt
     } else {
         switch (ip_header->protocol) {
             case IPPROTO_TCP:
-                send_tcp_to_loopback(tun_fd, ip_header, length);
+                send_tcp(tun_fd, ip_header, length);
                 break;
             case IPPROTO_UDP:
                 send_udp(tun_fd, ip_header);
