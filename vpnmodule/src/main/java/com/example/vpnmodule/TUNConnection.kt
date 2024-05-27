@@ -45,7 +45,7 @@ class TUNConnection(
                 // Read the outgoing packet from the input stream.
                 val length = `in`.read(packet)
                 if (length > 0) {
-                    nativeLib.handleIpPkt(packet, length, iface.fd)
+//                    nativeLib.handleIpPkt(packet, length, iface.fd)
                 } else if (length < 0) {
                     throw IOException("Tunnel EOF")
                 }

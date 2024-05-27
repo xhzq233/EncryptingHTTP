@@ -42,7 +42,7 @@ class ShinProxyService {
             serverSocket = ServerSocket()
             serverSocket!!.bind(servingProxy.address())
 
-            executors = Executors.newFixedThreadPool(10)
+            executors = Executors.newFixedThreadPool(12)
 
             cronetEngine = CronetEngine.Builder(context).build()
 

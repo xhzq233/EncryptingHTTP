@@ -29,14 +29,18 @@ import okhttp3.Callback
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import java.io.File
 import java.io.IOException
-import java.lang.StringBuilder
-import java.net.Socket
+import java.nio.file.Path
 
 
 class MainActivity : ComponentActivity() {
 
     private val client = OkHttpClient()
+
+    companion object {
+        val requestIdStartTimeMillis: MutableMap<String, Long> = mutableMapOf()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,20 +79,31 @@ fun Request(client: OkHttpClient = OkHttpClient()) {
             response.headers.forEach {
                 sb.append(it.first).append(": ").append(it.second).append("\n")
             }
-            sb.append("\n")
-            response.body?.string()?.let {
-                sb.append(it)
+            // save body to file
+
+            response.body?.byteStream()?.let {
+                val filePath: Path = kotlin.io.path.createTempFile()
+                it.copyTo(File(filePath.toString()).outputStream())
+                sb.append("Body saved to $filePath\n")
+                Log.i("DEMO", "Body saved to $filePath")
             }
+
+            response.body?.string()?.let {}
             Log.i("DEMO", "onResponse\n$sb")
             stringResp.value = sb.toString()
+
+            val url = response.request.url.toString()
+            Log.i("DEMO", "Request $url took ${System.currentTimeMillis() - MainActivity.requestIdStartTimeMillis[url]!!}ms")
         }
     }
 
     fun request(url: String) {
         stringResp.value = "None"
-        val req = Request.Builder()
+        val req: Request = Request.Builder()
             .url(url)
             .build()
+
+        MainActivity.requestIdStartTimeMillis[url] = System.currentTimeMillis()
 
         client.newCall(req).enqueue(callback)
     }
@@ -96,9 +111,9 @@ fun Request(client: OkHttpClient = OkHttpClient()) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Button({ request("http://http3.is") }) { Text(text = "Request HTTP") }
-        Button({ request("https://http2.pro/api/v1") }) { Text(text = "Request HTTPS(HTTP2)") }
-        Button({ request("https://http3.is") }) { Text(text = "Request HTTPS(HTTP3)") }
+        Button({ for (i in 1..9) request("http://xhzq.xyz:8888/$i.epub") }) { Text(text = "Request HTTP") }
+        Button({ for (i in 1..9) request("https://xhzq.xyz:8889/$i.epub") }) { Text(text = "Request HTTPS(HTTP2)") }
+        Button({ for (i in 1..9) request("http://xhzq.xyz:8889/$i.epub") }) { Text(text = "Request HTTPS(TEST)") }
         Divider()
         Text(
             stringResp.value,
